@@ -1,157 +1,120 @@
-# HealthAdvisorAI-POC
 
-A proof-of-concept health advisory system using LLaMA 3.2 1B model with optimized prompting for medical recommendations. Includes Streamlit demo interface for testing.
+# HealthAdvisorAI-POC (FastAPI Backend API)
+
+A proof-of-concept health advisory system using the LLaMA 3.2 1B model. This project provides a backend API built with FastAPI for generating medical recommendations based on user health data.
 
 ## What This Actually Does
 
-This POC demonstrates how to build a functional health advisory system using a small, locally-running LLM. The core system takes user health data (symptoms, biomarkers, lifestyle metrics) and generates structured health recommendations using carefully crafted prompts. A Streamlit interface is provided for easy testing and demonstration.
+This POC demonstrates how to build a functional health advisory backend using a small, locally-running LLM. The core system, exposed via an API:
+* Accepts user health data (symptoms, biomarkers, lifestyle metrics) as a JSON input.
+* Generates structured health recommendations using carefully crafted prompts and the LLaMA model.
+* Provides an HTTP endpoint for programmatic interaction.
 
 ## Technical Implementation
 
-### Architecture
+### Architecture (FastAPI API)
+Your project structure should reflect the FastAPI application:
 ```
-├── app.py                 # Streamlit demo interface
-├── config.py             # Model and app configuration
+├── api_main.py         # FastAPI application (CORE API logic)
+├── config.py           # Model and app configuration
 ├── model_manager.py      # Model download/loading/inference (CORE)
 ├── prompt_templates.py   # Prompt engineering templates (CORE)
 ├── utils.py              # Input validation and formatting
 ├── requirements.txt      # Dependencies
-└── models/               # Downloaded model storage
+└── models/               # Downloaded model storage (e.g., llama-3.2-1b-instruct-q4_k_m.gguf)
 ```
 
 ### Core Components
 
-**Model Management (`model_manager.py`)**
-- Downloads LLaMA 3.2 1B Instruct (Q4_K_M quantized) from HuggingFace
-- Uses `llama-cpp-python` for CPU inference
-- Configuration: 4K context, temp=0.5, max_tokens=1000
+* **FastAPI Application (`api_main.py`)**:
+    * Provides an HTTP POST endpoint (`/get_health_recommendations`) to receive health data and return recommendations.
+    * Uses Pydantic for request and response data validation.
+    * Integrates `ModelManager` for inference and `PromptTemplates` for prompt generation.
+    * Loads the LLM on application startup using FastAPI's `lifespan` manager.
+* **Model Management (`model_manager.py`)**:
+    * Downloads LLaMA 3.2 1B Instruct (Q4_K_M quantized) from HuggingFace (if not present).
+    * Uses `llama-cpp-python` for inference (supports CPU or GPU with Metal on macOS).
+    * Configuration is managed in `config.py`.
+* **Prompt Engineering (`prompt_templates.py`)**:
+    * Contains the comprehensive system prompt designed for clinical advice.
+    * Structures the output into multiple sections (e.g., risks, advice, recommendations).
+    * Uses LLaMA 3 chat format with appropriate special tokens (ensure no duplicate BOS tokens).
+* **Utilities (`utils.py`)**:
+    * Handles input validation and response formatting.
 
-**Prompt Engineering (`prompt_templates.py`)**
-- Single comprehensive system prompt (not multiple tested templates)
-- Structured to output 4 sections: Short-term risks, Long-term risks, Warnings, Advice
-- Includes clinical reference ranges in the prompt
-- Uses LLaMA chat format with proper tokens
+## Model Configuration (Example from `config.py`)
 
-**Frontend (`app.py`)**
-- Streamlit demo interface for testing the POC
-- Model download/load UI flow
-- Basic input validation
-- Response formatting and display
-
-## Why This Model Choice
-
-**LLaMA 3.2 1B Instruct** was chosen because:
-- Small enough to run on consumer hardware (681MB quantized)
-- Decent instruction following for its size
-- Fast inference (~2-10 seconds depending on hardware)
-- Good balance of capability vs. resource usage
-
-The Q4_K_M quantization provides reasonable quality with significantly reduced memory footprint.
-
-## Prompt Engineering Approach
-
-The key technical insight is the structured prompt design:
-
-1. **System Role Definition**: Explicit "AI Health Advisor" role with clinical reasoning instructions
-2. **Output Format Specification**: Exact 4-section structure required
-3. **Clinical Context**: Medical reference ranges embedded in prompt
-4. **Response Rules**: Specific constraints (no bullet points, direct patient communication, data-grounded responses)
-5. **Input Structure**: Formatted user data with clear categories
-
-The prompt is approximately 2000 tokens and includes medical reference ranges to help the model reason about clinical values.
-
-## Technical Specifications
-
-**Model**: `hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF`
-- Parameters: 1.2B
-- Quantization: Q4_K_M (4-bit)
-- File size: ~681MB
-- Context window: 4096 tokens
-
-**Runtime Configuration**:
+Ensure your `config.py` contains your `MODEL_CONFIG`. Example:
 ```python
-{
+MODEL_CONFIG = {
     "n_ctx": 4096,
-    "n_threads": 4,
-    "temperature": 0.5,
-    "max_tokens": 1000,
-    "top_p": 0.9,
+    "n_threads": 8,       # Adjust based on your CPU (e.g., 4 for M1/M2 performance cores)
+    "n_gpu_layers": 20,   # Number of layers to offload to GPU (try -1 for all on M-series Mac)
+    "temperature": 0.1,
+    "max_tokens": 400,    # Max tokens for the generated response
+    "top_p": 0.85,
     "repeat_penalty": 1.1,
+    # "n_batch": 512, # If used
 }
 ```
 
-**Dependencies**:
-- `llama-cpp-python`: LLM inference engine (CORE)
-- `huggingface-hub`: Model downloading (CORE)
-- `streamlit`: Demo web interface
-- Standard Python utilities
+## Dependencies
 
-## Installation (Demo)
+Key dependencies (should be in `requirements.txt`):
+* `fastapi`
+* `uvicorn[standard]`
+* `llama-cpp-python`
+* `huggingface-hub`
+* `pydantic`
 
-1. **Create virtual environment**:
-   ```bash
-   python -m venv health_advisor_env
-   source health_advisor_env/bin/activate  # Linux/Mac
-   # OR
-   health_advisor_env\Scripts\activate     # Windows
-   ```
+## Installation and Running the API
 
-2. **Install requirements**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+1.  **Clone the repository (if applicable) and navigate to the project directory.**
 
-3. **Run demo**:
-   ```bash
-   streamlit run app.py
-   ```
+2.  **Create and activate a virtual environment** (Recommended):
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate  # On macOS/Linux
+    # venv\Scripts\activate    # On Windows
+    ```
 
-4. **First-time setup**:
-   - Click "Download & Load Model" in sidebar
-   - Wait for 681MB model download
-   - Model loads into memory (~2GB RAM usage)
-   - Enter health data and click "Get Health Recommendations"
+3.  **Install requirements**:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-## Input Data Structure
+4.  **Run the API server**:
+    ```bash
+    uvicorn api_main:app --reload --host 0.0.0.0 --port 8000
+    ```
+    The API will be accessible at `http://localhost:8000`. The model will be downloaded (if not present in `./models`) and loaded on startup.
 
-The system expects structured health data:
-- **Symptoms/Disease History**: Text description of current symptoms and medical history
-- **Biomarkers**: Lab values (blood work, vitals, etc.)
-- **Clinical Notes**: Additional physician remarks or observations
-- **Screen Time**: Digital device usage patterns
-- **Health Tracking**: Steps, BP, sleep, emotional state, etc.
+## Interacting with the API
 
-## Output Format
+* **Endpoint**: `POST /get_health_recommendations`
+* **Request Body (JSON)**:
+    ```json
+    {
+      "user_input": "Your detailed health information string here..."
+    }
+    ```
+* **Response Body (JSON)**:
+    ```json
+    {
+      "recommendations": "The generated health advice...",
+      "execution_time_seconds": 12.34
+    }
+    ```
+* **Interactive API Documentation (Swagger UI)**: Open your browser to `http://localhost:8000/docs`
+* **Alternative API Documentation (ReDoc)**: Open your browser to `http://localhost:8000/redoc`
 
-The model generates a structured response with:
-1. **Short-Term Risks**: Immediate health concerns based on current data
-2. **Long-Term Risks**: Chronic disease risk assessment
-3. **Warnings**: Critical issues requiring medical attention
-4. **Advice**: Personalized recommendations based on input data
+You can use tools like Postman, `curl`, or the interactive Swagger UI (recommended for easy testing) to send requests.
 
+## Performance
 
-## Performance Characteristics
-
-**Response Time**: 5-30 seconds depending on hardware
-**Memory Usage**: ~2GB RAM during inference
-**Model Loading**: ~10-30 seconds initial load
-**Accuracy**: Depends heavily on prompt quality and input data structure
-
+* **Response Time**: Actively being optimized. Current times vary based on hardware and `MODEL_CONFIG` settings (especially `n_gpu_layers`, `max_tokens`, and `n_threads`).
+* **Model Used**: `hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF` (~681MB)
 
 ## Development Notes
 
-This is a **proof of concept** demonstrating:
-- Local LLM deployment for healthcare applications
-- Effective prompt engineering for domain-specific tasks  
-- Model management for consumer hardware
-
-**Demo Interface**: The Streamlit app (`app.py`) is purely for demonstration and testing purposes. The core POC consists of `model_manager.py` and `prompt_templates.py`, which can be integrated into any application architecture.
-
-**Key Challenge**: The current 681MB model size presents deployment challenges for production servers. Organizations require smaller models (ideally <200MB) for cost-effective scaling and cloud deployment. This POC proves the concept works, but production deployment would need further model optimization or alternative approaches like:
-
-- More aggressive quantization (Q2_K/Q3_K)
-- Model pruning techniques
-- Specialized smaller models trained specifically for health advisory
-- API-based solutions for resource-constrained environments
-
-The focus was on creating a working system that balances capability with practical deployment constraints.
+This is a proof-of-concept demonstrating a local LLM deployed as a backend API for health advisory. The core logic resides in `api_main.py`, `model_manager.py`, and `prompt_templates.py`.
