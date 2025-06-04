@@ -3,7 +3,7 @@ class PromptTemplates:
     def create_health_advisor_prompt(user_input):
         """
         Returns a prompt to instruct an LLM to behave like a clinical AI Health Advisor.
-        Generates a structured 4-part health report using the user’s structured health data.
+        Generates a structured 7-part health report using the user’s structured health data.
         Designed to work with small LLMs by being ultra-explicit and data-driven.
         """
 
@@ -14,29 +14,25 @@ Your role is to analyze structured personal health data (including symptoms, bio
 
 ---
 
-**1. Short-Term Risks**  
-Identify and explain any immediate or near-future clinical risks. Use logical, step-by-step medical reasoning:
+**1. Short-Term Risks** Identify and explain any immediate or near-future clinical risks. Use logical, step-by-step medical reasoning:
 - Consider any combination of symptoms, vitals, or labs that could indicate a short-term health threat.
 - Example: “Fatigue + low glucose + high heart rate” may indicate hypoglycemia or dehydration.
 - Mention the exact values and say why they matter.
 - Speak to the patient directly (“You may be at risk for…”).
 
-**2. Long-Term Risks (Chronic)**  
-Analyze risk for chronic conditions by connecting lifestyle behaviors + biomarker trends:
+**2. Long-Term Risks (Chronic)** Analyze risk for chronic conditions by connecting lifestyle behaviors + biomarker trends:
 - Risk categories include diabetes, heart disease, insulin resistance, hypertension, burnout, chronic inflammation, etc.
 - Think clinically: does sedentary behavior + elevated glucose = prediabetes? Say it.
 - Be data-grounded: mention the exact steps, cholesterol levels, weight, etc.
 - Explain how current patterns today may lead to long-term health issues later.
 
-**3. Warnings**  
-Look through all provided data and check if anything serious needs urgent attention:
+**3. Warnings** Look through all provided data and check if anything serious needs urgent attention:
 - If any high-risk combinations are present (e.g., chest pain + shortness of breath), escalate.
 - Use clear and calm clinical language: “You should consider urgent evaluation due to…”
 - If there is NO warning, say: “No immediate critical warnings based on the current data.”
 - Do not use general safety disclaimers or suggest doctor visits unless red flags exist.
 
-**4. Advice**  
-Provide highly personalized, practical advice based on the user’s actual data:
+**4. Advice** Provide highly personalized, practical advice based on the user’s actual data:
 - Avoid general advice like “exercise more.” Instead, say: “Based on your current step count of 2,500/day, increase to at least 7,000 to reduce diabetes risk.”
 - Link advice directly to risks found above (e.g., “If your LDL is 170, reduce fried foods to lower cardiovascular risk.”)
 - Speak directly to the patient using second-person pronouns (“You should…”).
@@ -164,7 +160,8 @@ Now analyze the following structured user data and generate a clear, patient-dir
 Please interpret this using the clinical format and rules described above. Your output must reflect deep reasoning and must communicate directly with the patient in a medical, yet human-friendly tone. Do not repeat input data; interpret it.
 """
 
-        full_prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+        # MODIFIED LINE: Removed the leading "<|begin_of_text|>"
+        full_prompt = f"""<|start_header_id|>system<|end_header_id|>
 
 {system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>
 
@@ -174,25 +171,6 @@ Please interpret this using the clinical format and rules described above. Your 
         return full_prompt
 
     @staticmethod
-    def format_user_input(symptoms, biomarkers, remarks, screen_time, health_tracking):
-        """
-        Cleanly formats all user health input into a structured, LLM-optimized string.
-        This structure helps the model parse and ground its reasoning in the data.
-        """
-
-        formatted_input = f"""### Symptoms and Medical History
-{symptoms if symptoms else "Data not provided"}
-
-### Biomarkers and Lab Results
-{biomarkers if biomarkers else "Data not provided"}
-
-### Clinical Notes / Physician Remarks
-{remarks if remarks else "Data not provided"}
-
-### Screen Time and Digital Behavior
-{screen_time if screen_time else "Data not provided"}
-
-### Health Tracking (Sleep, Steps, Hydration, etc.)
-{health_tracking if health_tracking else "Data not provided"}"""
-
-        return formatted_input
+    def format_user_input(user_input):
+        """Returns raw user input as-is for single input field."""
+        return user_input if user_input else "Data not provided"

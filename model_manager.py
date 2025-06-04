@@ -1,65 +1,79 @@
-import os
-import streamlit as st
-from huggingface_hub import hf_hub_download
+# model_manager.py
+import logging
+import os # Ensure os is imported if used for CUDA_AVAILABLE check etc.
 from llama_cpp import Llama
-from config import MODEL_REPO, MODEL_FILENAME, MODEL_PATH, MODEL_CONFIG
+from config import MODEL_PATH, MODEL_CONFIG 
+
+# Ensure logger is configured (FastAPI might do this, but good for standalone testing too)
+logging.basicConfig(level=logging.INFO) 
+logger = logging.getLogger(__name__) # Use __name__ for module-specific logger
 
 class ModelManager:
     def __init__(self):
+        logger.info("ModelManager __init__ called.")
         self.model = None
         self.model_path = MODEL_PATH
-        
-    def download_model(self):
-        """Download the model from Hugging Face Hub"""
-        try:
-            # Create models directory if it doesn't exist
-            os.makedirs("models", exist_ok=True)
-            
-            if not os.path.exists(self.model_path):
-                with st.spinner("Downloading model... This may take a few minutes."):
-                    hf_hub_download(
-                        repo_id=MODEL_REPO,
-                        filename=MODEL_FILENAME,
-                        local_dir="models",
-                        local_dir_use_symlinks=False
-                    )
-                st.success("Model downloaded successfully!")
-            return True
-        except Exception as e:
-            st.error(f"Error downloading model: {str(e)}")
-            return False
-    
+        logger.info(f"ModelManager __init__ completed. self.model is {self.model}. self.model_path is {self.model_path}")
+        # Verify MODEL_PATH exists right away
+        if not os.path.exists(self.model_path):
+            logger.warning(f"In __init__: MODEL_PATH '{self.model_path}' does not exist.")
+
+
     def load_model(self):
-        """Load the model into memory"""
+        logger.info("load_model called.")
+        if not hasattr(self, 'model'):
+            logger.error("CRITICAL: In load_model, 'self' (ModelManager instance) does not have 'model' attribute AT ALL right at the start! This means __init__ might not have run correctly or 'model' was deleted.")
+            return False
+
+        logger.info(f"In load_model, self.model is currently: {self.model}")
+
         try:
             if self.model is None:
-                with st.spinner("Loading model..."):
-                    self.model = Llama(
-                        model_path=self.model_path,
-                        n_ctx=MODEL_CONFIG["n_ctx"],
-                        n_threads=MODEL_CONFIG["n_threads"],
-                        verbose=False
-                    )
-                st.success("Model loaded successfully!")
+                logger.info(f"Attempting to load Llama model from path: {self.model_path}")
+                if not os.path.exists(self.model_path):
+                    logger.error(f"Llama model file not found at path: {self.model_path}")
+                    return False # Cannot load if file doesn't exist
+                
+                # Ensure MODEL_CONFIG has all necessary keys Llama is expecting
+                logger.info(f"Using MODEL_CONFIG: {MODEL_CONFIG}")
+
+                self.model = Llama(
+                    model_path=self.model_path,
+                    n_ctx=MODEL_CONFIG.get("n_ctx", 2048), # Use .get for safety
+                    n_threads=MODEL_CONFIG.get("n_threads", None), # None might mean auto
+                    n_batch=MODEL_CONFIG.get("n_batch", 512),
+                    # n_gpu_layers=1 if os.environ.get("CUDA_AVAILABLE") == "True" else 0, # Example for gpu layers
+                    n_gpu_layers=MODEL_CONFIG.get("n_gpu_layers", 0), # Add to config or handle
+                    verbose=False # Keep verbose False for cleaner logs unless debugging Llama internals
+                )
+                logger.info("Llama model loaded successfully into self.model.")
+            else:
+                logger.info("Model was already loaded.")
             return True
-        except Exception as e:
-            st.error(f"Error loading model: {str(e)}")
+        except AttributeError as ae: # Catch AttributeError specifically
+            logger.error(f"AttributeError specifically during model loading: {str(ae)}", exc_info=True)
             return False
-    
+        except Exception as e:
+            logger.error(f"General error during model loading: {str(e)}", exc_info=True) # exc_info=True will give you the full traceback for the original error
+            return False
+
     def generate_response(self, prompt):
-        """Generate response using the loaded model"""
-        if self.model is None:
-            raise ValueError("Model not loaded")
+        if not hasattr(self, 'model') or self.model is None:
+            logger.error("generate_response: Model not loaded or 'model' attribute missing.")
+            raise ValueError("Model not loaded. Cannot generate response.")
         
+        logger.info("generate_response called with prompt.")
         try:
-            response = self.model(
+            response = self.model( # This is where self.model is used
                 prompt,
-                max_tokens=MODEL_CONFIG["max_tokens"],
-                temperature=MODEL_CONFIG["temperature"],
-                top_p=MODEL_CONFIG["top_p"],
-                repeat_penalty=MODEL_CONFIG["repeat_penalty"],
-                stop=["</s>", "<|end|>", "\n\nUser:", "\n\nHuman:"]
+                max_tokens=MODEL_CONFIG.get("max_tokens", 150),
+                temperature=MODEL_CONFIG.get("temperature", 0.7),
+                top_p=MODEL_CONFIG.get("top_p", 0.95),
+                repeat_penalty=MODEL_CONFIG.get("repeat_penalty", 1.1),
+                stop=["</s>", "<|end|>", "\n\nUser:", "\n\nHuman:"] # Common stop tokens
             )
+            logger.info("Response generated by Llama model.")
             return response['choices'][0]['text'].strip()
         except Exception as e:
-            raise Exception(f"Error generating response: {str(e)}")
+            logger.error(f"Error during model inference (generate_response): {str(e)}", exc_info=True)
+            raise Exception(f"Error generating response from Llama model: {str(e)}")
